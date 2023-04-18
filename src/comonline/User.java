@@ -1,9 +1,11 @@
 package comonline;
 
+import java.io.BufferedReader;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.net.Socket;
 import java.net.UnknownHostException;
@@ -15,6 +17,9 @@ public class User {
 	private String password;
 	private String dirIP;
 	private Socket socket;
+	private String messageRecieved;
+	
+	private volatile boolean communicationEnded;
 
     // Crea un flujo de salida para enviar el mensaje al servidor
 	private OutputStream outputStream;
@@ -31,6 +36,7 @@ public class User {
 		this.username = username;
 		this.password = password;
 		this.dirIP = dirIP;
+		communicationEnded = false;
 		
 		socket = new Socket(this.dirIP, CONNECTION_PORT);
 		
@@ -54,20 +60,31 @@ public class User {
 	
 	public void recibirMensajes() {
 		new Thread(() -> {
-			try {
-				while (true) {
-					// Lee el mensaje enviado por el servidor
-					String mensaje = dataInputStream.readUTF();
-					System.out.println("Mensaje recibido del servidor: " + mensaje);
+			while (true) {
+				// Lee el mensaje enviado por el servidor
+				BufferedReader reader = new BufferedReader(new InputStreamReader(dataInputStream));
+				String mensaje;
+				try {
+					if((mensaje = reader.readLine().trim())!=null)
+						if(mensaje.equals("endCon")) {
+							communicationEnded = true;
+							return;
+						}
+						System.out.println("Mensaje recibido del servidor: " + mensaje);
+						messageRecieved = mensaje;
+				} catch (IOException e) {
+					// TODO Auto-generated catch block
+					e.printStackTrace();
+					return;
 				}
-			} catch (IOException e) {
-				e.printStackTrace();
 			}
 		}).start();
 	}
 	
 	public void closeConnection() throws IOException {
 		
+		dataInputStream.close();
+		inputStream.close();
 		dataOutputStream.close();
         outputStream.close();
         socket.close();
@@ -84,13 +101,16 @@ public class User {
 		
 		try (Scanner scanner = new Scanner(System.in)) {
 			
+			
 			String username = scanner.nextLine();
 			String message;
 			System.out.print("Ingrese su contraseña: ");
 			String password = scanner.nextLine();
 			User user = new User(username, "123",serverIP);
+			user.recibirMensajes();
 			user.enviarMensaje(username+"\n");
 			user.enviarMensaje(password+"\n");
+			
 			
 			System.out.println("Envie un mensaje:");
 			
